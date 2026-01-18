@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Place Order</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="order-page">
+<header>
+<a href="index.html" class="logo">🍔 Foods for you</a>
+<nav>
+<a href="index.html">Home</a>
+<a href="menu.html">Menu</a>
+<a href="admin.html">Admin</a>
+</nav>
+</header>
+
+<div class="order-container">
+<div class="order-box">
+<h2>Place Your Order</h2>
+<form id="orderForm">
+<div class="form-group">
+<label>Select Item</label>
+<select name="item" id="itemSelect" required>
+<option value="">Choose an item...</option>
+</select>
+</div>
+
+<div class="form-group">
+<label>Quantity</label>
+<input type="number" id="quantityInput" name="quantity" min="1" value="1" required>
+<div id="quantityError" class="error" style="display:none; margin-top:6px; font-size:14px;"></div>
+</div>
+
+<div class="form-group">
+<label>Full Name</label>
+</div>
+
+<div class="form-group">
+<label>Full Name</label>
+<input type="text" id="nameInput" name="name" placeholder="Enter your name" required>
+<div id="nameError" class="error" style="display:none; margin-top:6px; font-size:14px;"></div>
+</div>
+
+<div class="form-group">
+<label>Phone Number</label>
+<input type="tel" id="phoneInput" name="phone" placeholder="Enter your phone number" required>
+<div id="phoneError" class="error" style="display:none; margin-top:6px; font-size:14px;"></div>
+</div>
+
+<div class="form-group">
+<label>Delivery Address</label>
+<textarea id="addressInput" name="address" placeholder="Enter your delivery address" rows="3" required></textarea>
+<div id="addressError" class="error" style="display:none; margin-top:6px; font-size:14px;"></div>
+</div>
+
+<div class="form-group">
+<label>Payment Method</label>
+<select name="payment" required>
+<option value="">Select payment method...</option>
+<option value="Cash on Delivery">Cash on Delivery</option>
+<option value="Credit Card">Credit Card</option>
+<option value="Debit Card">Debit Card</option>
+</select>
+</div>
+
+<button type="submit" class="order-btn">Place Order</button>
+</form>
+
+<div id="orderMessage" class="msg" style="display: none;"></div>
+</div>
+</div>
+
+<script>
+const API_BASE_URL = 'http://localhost:3000/api';
+
+// Load menu items into select dropdown
+async function loadMenuItems() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/menu`);
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+            const itemSelect = document.getElementById('itemSelect');
+            itemSelect.innerHTML = '<option value="">Choose an item...</option>' +
+                result.data.map(item => 
+                    `<option value="${item.name}" data-price="${item.price}">${item.name} - Rs.${item.price}</option>`
+                ).join('');
+            
+            // Pre-select item from URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            const item = urlParams.get('item');
+            if (item) {
+                itemSelect.value = item;
+            }
+        }
+    } catch (error) {
+        console.error('Error loading menu:', error);
+        // Fallback to hardcoded options if API fails
+        const itemSelect = document.getElementById('itemSelect');
+        itemSelect.innerHTML = `
+            <option value="">Choose an item...</option>
+            <option value="Pizza">Pizza - Rs.1200</option>
+            <option value="Burger">Burger - Rs.600</option>
+            <option value="Pasta">Pasta - Rs.900</option>
+        `;
+        
+        const urlParams = new URLSearchParams(window.location.search);
+        const item = urlParams.get('item');
+        if (item) {
+            itemSelect.value = item;
+        }
+    }
+}
+
+// Submit order to backend
+document.getElementById('orderForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const orderData = {
+        item: formData.get('item'),
+        quantity: formData.get('quantity'),
+        name: formData.get('name'),
+        phone: formData.get('phone'),
+        address: formData.get('address'),
+        payment: formData.get('payment')
+    };
+    
+    const messageDiv = document.getElementById('orderMessage');
+
+    // Final frontend validation (in case user bypassed inline check)
+    const nameValue = (orderData.name || '').trim();
+    const nameRegex = /^[A-Za-z\s]+$/;
+    if (!nameRegex.test(nameValue)) {
+        const nameError = document.getElementById('nameError');
+        nameError.style.display = 'block';
+        nameError.textContent = 'Name should contain only letters.';
+        document.getElementById('nameInput').focus();
+        return;
+    }
+
+    // Quantity
+    const qty = parseInt(orderData.quantity, 10);
+    if (!Number.isInteger(qty) || qty < 1) {
+        const quantityError = document.getElementById('quantityError');
+        quantityError.style.display = 'block';
+        quantityError.textContent = 'Quantity must be at least 1.';
+        document.getElementById('quantityInput').focus();
+        return;
+    }
+
+    // Phone
+    const phoneRaw = (orderData.phone || '').trim();
+    const phoneDigits = phoneRaw.replace(/[^0-9]/g, '');
+    if (phoneDigits.length < 7 || phoneDigits.length > 15) {
+        const phoneError = document.getElementById('phoneError');
+        phoneError.style.display = 'block';
+        phoneError.textContent = 'Enter a valid phone number (7-15 digits).';
+        document.getElementById('phoneInput').focus();
+        return;
+    }
+
+    // Address
+    const addr = (orderData.address || '').trim();
+    if (addr.length < 5) {
+        const addressError = document.getElementById('addressError');
+        addressError.style.display = 'block';
+        addressError.textContent = 'Address should be at least 5 characters.';
+        document.getElementById('addressInput').focus();
+        return;
+    }
+
+    // clear inline errors and proceed
+    document.getElementById('nameError').style.display = 'none';
+    document.getElementById('quantityError').style.display = 'none';
+    document.getElementById('phoneError').style.display = 'none';
+    document.getElementById('addressError').style.display = 'none';
+    messageDiv.style.display = 'block';
+    messageDiv.textContent = 'Placing your order...';
+    messageDiv.style.color = '#ffd700';
+    
+    try {
+        const response = await fetch(`${API_BASE_URL}/orders`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(orderData)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            messageDiv.textContent = `Thank you ${orderData.name}! Your order for ${orderData.quantity} ${orderData.item}(s) has been placed successfully. Order ID: ${result.data.id}`;
+            messageDiv.style.color = '#ffd700';
+            this.reset();
+            loadMenuItems(); // Reload menu items
+            
+            setTimeout(() => {
+                messageDiv.style.display = 'none';
+            }, 8000);
+        } else {
+            messageDiv.textContent = `Error: ${result.error || 'Failed to place order'}`;
+            messageDiv.style.color = '#ff6b6b';
+        }
+    } catch (error) {
+        console.error('Error placing order:', error);
+        messageDiv.textContent = 'Unable to connect to server. Please make sure the backend is running.';
+        messageDiv.style.color = '#ff6b6b';
+    }
+});
+
+// Load menu items when page loads
+loadMenuItems();
+
+    // Inline validation for fields: name, quantity, phone, address
+    (function() {
+        const orderForm = document.getElementById('orderForm');
+        const submitBtn = orderForm.querySelector('button[type="submit"]');
+
+        const nameInput = document.getElementById('nameInput');
+        const nameError = document.getElementById('nameError');
+        const nameRegex = /^[A-Za-z\s]+$/;
+
+        const quantityInput = document.getElementById('quantityInput');
+        const quantityError = document.getElementById('quantityError');
+
+        const phoneInput = document.getElementById('phoneInput');
+        const phoneError = document.getElementById('phoneError');
+        // allow digits, spaces, plus and hyphen; require 7-15 digits total
+        const phoneDigitsRegex = /^[0-9\s+\-()]+$/;
+
+        const addressInput = document.getElementById('addressInput');
+        const addressError = document.getElementById('addressError');
+
+        function validateName() {
+            const val = (nameInput.value || '').trim();
+            if (val === '') {
+                nameError.style.display = 'none';
+                return true;
+            }
+            if (!nameRegex.test(val)) {
+                nameError.style.display = 'block';
+                nameError.textContent = 'Name should contain only letters.';
+                return false;
+            }
+            nameError.style.display = 'none';
+            return true;
+        }
+
+        function validateQuantity() {
+            const val = Number(quantityInput.value);
+            if (Number.isNaN(val) || val < 1) {
+                quantityError.style.display = 'block';
+                quantityError.textContent = 'Quantity must be at least 1.';
+                return false;
+            }
+            quantityError.style.display = 'none';
+            return true;
+        }
+
+        function validatePhone() {
+            const raw = (phoneInput.value || '').trim();
+            const digits = raw.replace(/[^0-9]/g, '');
+            if (raw === '') {
+                phoneError.style.display = 'none';
+                return true;
+            }
+            if (!phoneDigitsRegex.test(raw) || digits.length < 7 || digits.length > 15) {
+                phoneError.style.display = 'block';
+                phoneError.textContent = 'Enter a valid phone number (7-15 digits).';
+                return false;
+            }
+            phoneError.style.display = 'none';
+            return true;
+        }
+
+        function validateAddress() {
+            const val = (addressInput.value || '').trim();
+            if (val.length < 5) {
+                addressError.style.display = 'block';
+                addressError.textContent = 'Address should be at least 5 characters.';
+                return false;
+            }
+            addressError.style.display = 'none';
+            return true;
+        }
+
+        function validateAll() {
+            const ok = validateName() & validateQuantity() & validatePhone() & validateAddress();
+            submitBtn.disabled = !ok;
+            return !!ok;
+        }
+
+        nameInput.addEventListener('input', validateAll);
+        quantityInput.addEventListener('input', validateAll);
+        phoneInput.addEventListener('input', validateAll);
+        addressInput.addEventListener('input', validateAll);
+
+        // initial run
+        validateAll();
+    })();
+</script>
+
+</body>
+</html>
